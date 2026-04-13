@@ -295,6 +295,18 @@ class AutomacaoAssinaturaLotes:
             "b.style.pointerEvents='none';b.style.zIndex='-9999';}"
         )
 
+    def _neutralizar_barra_governo(self):
+        """
+        Neutraliza a barra superior do Governo do Brasil.
+        Em algumas telas ela fica sobreposta no topo e pode interceptar cliques.
+        """
+        self.driver.execute_script(
+            "var el=document.querySelector('.bgBarraAmarelaGoverno');"
+            "if(el){el.style.pointerEvents='none';el.style.zIndex='0';}"
+            "var el2=document.querySelector('.barraGoverno');"
+            "if(el2){el2.style.pointerEvents='none';el2.style.zIndex='0';}"
+        )
+
     def _clicar_js(
         self,
         elemento,
@@ -309,6 +321,7 @@ class AutomacaoAssinaturaLotes:
         """
         for tentativa in range(1, max_tentativas + 1):
             try:
+                self._aguardar_pagina_pronta(timeout=12, contexto=f"{contexto} pré-clique" if contexto else "")
                 if scroll_antes:
                     self.driver.execute_script(
                         "arguments[0].scrollIntoView({block:'center',inline:'center',behavior:'instant'});",
@@ -317,7 +330,11 @@ class AutomacaoAssinaturaLotes:
                     time.sleep(0.25)
                 if esconder_rodape:
                     self._esconder_rodape_fixo()
+                    self._neutralizar_barra_governo()
                     time.sleep(0.15)
+                # Pequeno ajuste adicional para fugir de barras fixas no topo/rodapé
+                self.driver.execute_script("window.scrollBy(0, -80);")
+                time.sleep(0.10)
                 self.driver.execute_script("arguments[0].click();", elemento)
                 return True
             except StaleElementReferenceException:
@@ -333,6 +350,10 @@ class AutomacaoAssinaturaLotes:
                         f"Clique falhou ({contexto}) — tentativa {tentativa}/{max_tentativas}: {e}",
                         "WARNING",
                     )
+                    try:
+                        self._neutralizar_barra_governo()
+                    except Exception:
+                        pass
                     time.sleep(0.4)
                 else:
                     raise
