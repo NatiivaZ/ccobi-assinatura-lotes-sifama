@@ -1,7 +1,4 @@
-"""
-Automação para Assinatura de Lotes DOU — SIFAMA / ANTT
-Desenvolvido para o projeto CCOBI - SERASA
-"""
+"""Automação de assinatura de lotes no SIFAMA."""
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -29,9 +26,39 @@ try:
 except ImportError:
     OPENPYXL_DISPONIVEL = False
 
+from logging_utils import Logger
+from sifama_constantes import (
+    CSS_BTN_ASSINAR,
+    DELAYS,
+    DELAYS_SENHA_CLIQUES,
+    FORMAS_FISCALIZACAO,
+    ID_BTN_PESQUISAR,
+    ID_BTN_PROX_PAG,
+    ID_BTN_SALVAR,
+    ID_DATA_FINAL,
+    ID_DATA_INICIAL,
+    ID_FORMA_FISCALIZACAO,
+    ID_LOGIN_BTN,
+    ID_LOGIN_SENHA,
+    ID_LOGIN_USUARIO,
+    ID_MESSAGEBOX_OK,
+    ID_SENHA_CERT,
+    ID_SUBTIPO_FISCALIZACAO,
+    ID_TABELA_LOTES,
+    ID_TIPO_FISCALIZACAO,
+    ID_TIPO_PUBLICACAO,
+    LISTA_FORMAS,
+    LISTA_TIPOS_FISC,
+    SUBTIPOS_POR_TIPO,
+    TIPOS_FISCALIZACAO,
+    TIPOS_PUBLICACAO,
+    URL_LOGIN,
+    URL_LOTES,
+)
+
 
 def _formatar_data_dd_mm_yyyy(texto: str) -> str:
-    """Formata apenas dígitos em dd/mm/yyyy. Ex: '18022026' -> '18/02/2026'."""
+    """Formata só os dígitos em `dd/mm/yyyy` enquanto o usuário digita."""
     digitos = "".join(c for c in texto if c.isdigit())[:8]
     if len(digitos) <= 2:
         return digitos
@@ -39,154 +66,11 @@ def _formatar_data_dd_mm_yyyy(texto: str) -> str:
         return digitos[:2] + "/" + digitos[2:]
     return digitos[:2] + "/" + digitos[2:4] + "/" + digitos[4:]
 
-
-
-# ─────────────────────────────────────────────────────────────
-# Constantes — URLs e IDs dos elementos
-# ─────────────────────────────────────────────────────────────
-
-URL_LOGIN  = "https://appweb1.antt.gov.br/sca/Site/Login.aspx"
-URL_LOTES  = "https://appweb1.antt.gov.br/spm/Site/PublicacaoDOU/ConsultarAssinarLotePublicacaoSimplesDOU.aspx"
-
-_CP = "ContentPlaceHolderCorpo_" * 4  # prefixo comum a 4 níveis
-
-# Login
-ID_LOGIN_USUARIO = f"{_CP}TextBoxUsuario"
-ID_LOGIN_SENHA   = f"{_CP}TextBoxSenha"
-ID_LOGIN_BTN     = f"{_CP}ButtonOk"
-
-# Filtros da tela principal
-ID_DATA_INICIAL    = f"{_CP}txbDataInicial"
-ID_DATA_FINAL      = f"{_CP}txbDataFinal"
-ID_TIPO_PUBLICACAO = f"{_CP}ddlTipoPublicacao"
-ID_FORMA_FISCALIZACAO   = f"{_CP}ddlFormaFiscalizacao"
-ID_TIPO_FISCALIZACAO    = f"{_CP}tipoSubTipoFiscalizacao_ddlTipoFiscalizacao"
-ID_SUBTIPO_FISCALIZACAO = f"{_CP}tipoSubTipoFiscalizacao_ddlSubTipoFiscalizacao"
-ID_BTN_PESQUISAR   = f"{_CP}btnPesquisar"
-ID_TABELA_LOTES    = f"{_CP}gdvLotePublicacao"
-CSS_BTN_ASSINAR    = f"[id^='{_CP}gdvLotePublicacao_btnAssinarAuto_']"
-ID_BTN_PROX_PAG    = f"{_CP}ucPaginador_ucPaginador_lbNextPage"
-
-# Tela de assinatura (nova guia)
-ID_SENHA_CERT    = "ContentPlaceHolderCorpo_" * 3 + "ucSenhaCertificadoDigital_txbSenhaCertificadoDigital"
-ID_BTN_SALVAR    = "ContentPlaceHolderCorpo_" * 3 + "btnSalvar"
-ID_MESSAGEBOX_OK = "MessageBox_ButtonOk"
-
-TIPOS_PUBLICACAO = {
-    "Notificação de Autuação":      "1",
-    "Notificação de Multa":         "2",
-    "Cancelamento":                 "4",
-    "Notificação de Segunda Multa": "10",
-    "Notificação de Penalidade":    "16",
-    "Notificação Final de Multa":   "17",
-}
-
-# Forma de Fiscalização (valor enviado ao sistema -> texto no combo)
-FORMAS_FISCALIZACAO = {
-    "": "--Selecione--",
-    "1": "Eletrônica",
-    "2": "Manual",
-    "3": "Remota",
-}
-# Ordem para exibição no combo (valor, texto)
-LISTA_FORMAS = [("", "--Selecione--"), ("1", "Eletrônica"), ("2", "Manual"), ("3", "Remota")]
-
-# Tipo Fiscalização (mesma lista para todas as formas)
-TIPOS_FISCALIZACAO = {
-    "": "--Selecione--",
-    "2": "Excesso de Peso",
-    "3": "Cargas",
-    "4": "Passageiros",
-    "5": "Cargas Internacional",
-    "7": "Passageiros Internacional",
-    "8": "Infraestrutura Rodoviária",
-    "9": "Evasão de Pedágio",
-}
-LISTA_TIPOS_FISC = [("", "--Selecione--"), ("2", "Excesso de Peso"), ("3", "Cargas"), ("4", "Passageiros"),
-    ("5", "Cargas Internacional"), ("7", "Passageiros Internacional"), ("8", "Infraestrutura Rodoviária"), ("9", "Evasão de Pedágio")]
-
-# Subtipo por Tipo (chave = value do Tipo; valor = lista de (value, texto))
-SUBTIPOS_POR_TIPO = {
-    "2": [("", "--Selecione--"), ("5", "Excesso de Peso"), ("7", "CMT - Capacidade Máxima de Tração"), ("16", "Evasão de Balança")],
-    "3": [("", "--Selecione--"), ("8", "RNTRC - Registro Nacional de Transportadores Rodoviários de Cargas"), ("9", "PEF - Pagamento Eletrônico de Frete"), ("10", "Vale Pedágio"), ("17", "Produtos Perigosos"), ("24", "Piso Mínimo de Frete")],
-    "4": [("", "--Selecione--"), ("11", "Longa Distância"), ("12", "Semiurbano"), ("13", "Fretamento"), ("14", "Não Autorizado"), ("19", "Passageiro Econômico Financeiro"), ("20", "Fretamento Contínuo"), ("23", "Ferroviário de Passageiros")],
-    "5": [("", "--Selecione--"), ("21", "Cargas Internacional"), ("22", "Produtos Perigosos Internacional")],
-    "7": [("", "--Selecione--"), ("25", "Longa Distância"), ("26", "Semiurbano"), ("27", "Fretamento"), ("28", "Não Autorizado"), ("29", "Fretamento Contínuo")],
-    "8": [("", "--Selecione--"), ("30", "Infraestrutura Rodoviária")],
-    "9": [("", "--Selecione--"), ("31", "Evasão de Pedágio")],
-}
-
-# Delays padrão por etapa (em segundos) — multiplicados pelos fatores da GUI
-DELAYS = {
-    "apos_clicar_assinar":      1.2,  # aguardar nova guia abrir
-    "carregar_guia_assinatura": 2.0,  # aguardar tela de assinatura carregar completamente
-    "apos_preencher_senha":     0.8,  # pausa antes de clicar Salvar
-    "aguardar_messagebox":      600,  # timeout máximo (segundos) para o botão OK aparecer — 10 min
-    "log_aguardando_ok_cada":   15,   # logar "ainda aguardando" a cada N segundos
-    "apos_progresso_sumir":     1.5,  # pausa após a barra de progresso sumir, antes de clicar OK
-    "apos_clicar_ok":           1.0,  # aguardar guia fechar após clicar OK
-    "apos_voltar_aba":          1.5,  # estabilizar aba principal antes do próximo lote
-    "entre_lotes":              1.5,  # pausa entre um lote e o próximo
-    "carregar_proxima_pagina":  2.0,  # aguardar nova página da paginação carregar
-    "apos_refresh":            4.0,   # (não usado — substituído por fechar/reabrir)
-    "apos_fechar_navegador":   2.0,   # pausa após fechar navegador antes de reabrir (libera recursos)
-}
-
-# Chaves que recebem o fator_senha_cliques (senha + cliques) — permitem acelerar separadamente
-DELAYS_SENHA_CLIQUES = frozenset({
-    "apos_clicar_assinar", "carregar_guia_assinatura", "apos_preencher_senha",
-    "apos_progresso_sumir", "apos_clicar_ok", "apos_voltar_aba", "entre_lotes",
-})
-
-# ─────────────────────────────────────────────────────────────
-# O QUE É CONSIDERADO ERRO (apenas estas 3 situações):
-#   1. Nova guia de assinatura não abriu em 60s após clicar Assinar
-#   2. Barra Progress_UpdateProgress não sumiu em 600s após clicar Salvar
-#      (ex.: senha errada, sistema fora do ar, travamento)
-#   3. Exceção inesperada durante o processamento do lote
-#
-# NÃO É ERRO:
-#   - Overlay wings_process_presentation_dashboard_bar visível (página carregando)
-#   - Barra Progress_UpdateProgress visível (sistema processando) ← normal/esperado
-#   - Guia não fechar automaticamente (fecha manualmente, continua normalmente)
-#   - Delays / sleeps em andamento
-# ─────────────────────────────────────────────────────────────
-
-
-# ─────────────────────────────────────────────────────────────
-# Logger
-# ─────────────────────────────────────────────────────────────
-
-class Logger:
-    def __init__(self, callback=None, log_file: str = None):
-        self.callback = callback
-        self.log_file = log_file
-        if log_file:
-            pasta = os.path.dirname(log_file)
-            if pasta:
-                os.makedirs(pasta, exist_ok=True)
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.write(f"Log de Automação — Assinatura de Lotes DOU\n")
-                f.write(f"Iniciado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
-                f.write("=" * 60 + "\n\n")
-
-    def log(self, mensagem: str, tipo: str = "INFO"):
-        ts = datetime.now().strftime("%H:%M:%S")
-        linha = f"[{ts}] [{tipo}] {mensagem}"
-        print(linha)
-        if self.callback:
-            self.callback(linha, tipo)
-        if self.log_file:
-            try:
-                with open(self.log_file, "a", encoding="utf-8") as f:
-                    f.write(linha + "\n")
-            except Exception:
-                pass
-
-
-# ─────────────────────────────────────────────────────────────
-# Automação — lógica de negócio
-# ─────────────────────────────────────────────────────────────
+# Regras de leitura desta automação:
+# erro real aqui é quando a guia de assinatura não abre, quando o progresso não
+# termina dentro do tempo esperado ou quando acontece uma exceção inesperada.
+# Fora isso, overlays, esperas e até o fechamento manual da guia fazem parte do
+# fluxo normal e não devem ser tratados como falha.
 
 class AutomacaoAssinaturaLotes:
     def __init__(
@@ -206,7 +90,7 @@ class AutomacaoAssinaturaLotes:
         self.mensagem_final     = None  # Ex.: "Sessão expirada" — usado por _executar ao finalizar
 
     def _verificar_sessao_expirada(self) -> bool:
-        """Retorna True se a página atual for a tela de login (sessão expirada)."""
+        """Detecta se a página atual voltou para o login."""
         try:
             if not self.driver:
                 return False
@@ -216,7 +100,7 @@ class AutomacaoAssinaturaLotes:
             return False
 
     def _fechar_guia_assinatura_orphan(self):
-        """Fecha guias extras (ex.: de assinatura deixada aberta após erro) e volta para a primeira."""
+        """Fecha guias extras de assinatura e volta para a principal."""
         try:
             if not self.driver or not self.driver.window_handles:
                 return
@@ -233,7 +117,7 @@ class AutomacaoAssinaturaLotes:
             pass
 
     def _sleep(self, chave: str):
-        """Dorme pelo tempo configurado para a etapa, respeitando pausa/parar."""
+        """Espera o tempo configurado da etapa respeitando pausa e parada."""
         segundos = DELAYS[chave] * self.fator_delay
         if chave in DELAYS_SENHA_CLIQUES:
             segundos *= self.fator_senha_cliques
@@ -245,21 +129,10 @@ class AutomacaoAssinaturaLotes:
             time.sleep(0.2)
 
     def _aguardar_pagina_pronta(self, timeout: int = 30, contexto: str = ""):
-        """
-        Aguarda os overlays de carregamento do sistema sumirem antes de interagir.
-
-        Dois elementos cobrem a página durante o processamento:
-          - Progress_UpdateProgress          → spinner "Processando..."
-          - Progress_ModalProgress_backgroundElement → fundo opaco full-page (z-index 10000)
-
-        Ambos precisam estar invisíveis para que cliques funcionem.
-
-        NOTA: wings_process_presentation_dashboard_bar é rodapé FIXO permanente —
-        NUNCA aguardar esse elemento.
-        """
+        """Espera os overlays sumirem antes de qualquer clique mais sensível."""
         prefixo = f"[{contexto}] " if contexto else ""
 
-        # IDs que bloqueiam interações quando visíveis
+        # Só esses overlays realmente bloqueiam clique.
         OVERLAYS = [
             "Progress_ModalProgress_backgroundElement",  # fundo opaco full-page
             "Progress_UpdateProgress",                   # spinner de processamento
@@ -288,7 +161,7 @@ class AutomacaoAssinaturaLotes:
                 )
 
     def _esconder_rodape_fixo(self):
-        """Esconde o rodapé fixo wings_process_presentation_dashboard_bar que intercepta cliques."""
+        """Esconde o rodapé fixo que costuma interceptar clique."""
         self.driver.execute_script(
             "var b=document.getElementById('wings_process_presentation_dashboard_bar');"
             "if(b){b.style.display='none';b.style.visibility='hidden';"
@@ -296,10 +169,7 @@ class AutomacaoAssinaturaLotes:
         )
 
     def _neutralizar_barra_governo(self):
-        """
-        Neutraliza a barra superior do Governo do Brasil.
-        Em algumas telas ela fica sobreposta no topo e pode interceptar cliques.
-        """
+        """Neutraliza a barra do Governo quando ela aparece sobre a página."""
         self.driver.execute_script(
             "var el=document.querySelector('.bgBarraAmarelaGoverno');"
             "if(el){el.style.pointerEvents='none';el.style.zIndex='0';}"
@@ -315,10 +185,7 @@ class AutomacaoAssinaturaLotes:
         esconder_rodape: bool = True,
         max_tentativas: int = 3,
     ) -> bool:
-        """
-        Clique via JavaScript — evita ElementClickInterceptedException.
-        Usa scroll, esconde rodapé e retry. Nunca usa elemento.click() do Selenium.
-        """
+        """Faz clique via JavaScript com scroll e tentativas extras."""
         for tentativa in range(1, max_tentativas + 1):
             try:
                 self._aguardar_pagina_pronta(timeout=12, contexto=f"{contexto} pré-clique" if contexto else "")
@@ -332,7 +199,7 @@ class AutomacaoAssinaturaLotes:
                     self._esconder_rodape_fixo()
                     self._neutralizar_barra_governo()
                     time.sleep(0.15)
-                # Pequeno ajuste adicional para fugir de barras fixas no topo/rodapé
+                # Esse ajuste ajuda a escapar de barras fixas no topo e no rodapé.
                 self.driver.execute_script("window.scrollBy(0, -80);")
                 time.sleep(0.10)
                 self.driver.execute_script("arguments[0].click();", elemento)
@@ -1126,9 +993,7 @@ class AutomacaoAssinaturaLotes:
         return assinados, erros, set_numeros_inicio, dict_lotes_inicio
 
 
-# ─────────────────────────────────────────────────────────────
-# Interface Gráfica
-# ─────────────────────────────────────────────────────────────
+# Interface gráfica.
 
 VERDE    = "#27ae60"
 VERMELHO = "#e74c3c"
@@ -1138,13 +1003,13 @@ ESCURO   = "#2c3e50"
 CINZA_F  = "#f0f0f0"
 CINZA_E  = "#ecf0f1"
 
-# Fonte principal (Segoe UI no Windows é mais moderna; em outros SO pode cair para padrão)
+# Fonte principal da interface.
 FONTE_FAMILY = "Segoe UI"
 
 
 class InterfaceGrafica:
 
-    # Tamanho fixo da tela de login
+    # A tela inicial fica mais compacta.
     TAMANHO_LOGIN = (480, 380)
 
     def __init__(self):
@@ -1161,7 +1026,7 @@ class InterfaceGrafica:
         self.usuario_logado = ""
         self.senha_logada   = ""
 
-         # Momento em que o usuário clicou em "Iniciar" — usado para calcular o tempo total
+        # Marca o início da execução para o contador total.
         self.inicio_execucao: float | None = None
         self.timer_total_pausado: float = 0.0
         self.timer_pausado: bool = False
@@ -1176,8 +1041,7 @@ class InterfaceGrafica:
         self._centralizar_janela(w, h)
 
     def _centralizar_janela(self, largura: int, altura: int, offset_y: int = -60):
-        """Aplica geometry com largura/altura e centraliza no monitor.
-        offset_y desloca verticalmente (negativo = mais para cima)."""
+        """Aplica o tamanho da janela e centraliza na tela."""
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         x = max(0, (sw - largura) // 2)
@@ -1185,21 +1049,20 @@ class InterfaceGrafica:
         self.root.geometry(f"{largura}x{altura}+{x}+{y}")
 
     def _ajustar_tela_principal(self):
-        """Calcula o tamanho real necessário para a tela principal e centraliza.
-        Chamado via after() para garantir que o layout já foi calculado pelo Tkinter."""
+        """Ajusta o tamanho da tela principal depois que o layout estiver pronto."""
         self.root.update_idletasks()
         req_w = self.root.winfo_reqwidth()
         req_h = self.root.winfo_reqheight()
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        # Adiciona pequena margem e limita ao tamanho útil da tela (desconta barra de tarefas)
+        # Deixa uma margem pequena e evita passar da área útil da tela.
         w = min(req_w + 24, sw - 20)
         h = min(req_h + 24, sh - 80)
         self.root.minsize(min(w, 1000), min(h, 700))
         self._centralizar_janela(w, h)
 
     def _configurar_hover_botao(self, botao: tk.Button, cor_normal: str, cor_hover: str):
-        """Efeito hover: clareia o botão ao passar o mouse (só quando habilitado)."""
+        """Aplica o efeito de hover sem mexer em botão desabilitado."""
         def _on_enter(_):
             if botao["state"] == "normal":
                 botao.config(bg=cor_hover)
@@ -1209,7 +1072,7 @@ class InterfaceGrafica:
         botao.bind("<Enter>", _on_enter)
         botao.bind("<Leave>", _on_leave)
 
-    # ── Tela de login ────────────────────────────────────────
+    # Tela de login.
 
     def _tela_login(self):
         self.frame_login = tk.Frame(self.root, bg=CINZA_F)
@@ -1246,13 +1109,13 @@ class InterfaceGrafica:
         btn_entrar.grid(row=2, column=0, columnspan=2, pady=(24, 0))
         self._configurar_hover_botao(btn_entrar, AZUL, "#3498db")
 
-    # ── Tela principal ───────────────────────────────────────
+    # Tela principal.
     
 
     def _tela_principal(self):
         self.frame_principal = tk.Frame(self.root, bg=CINZA_F)
 
-        # Cabeçalho
+        # Cabeçalho da janela.
         hdr = tk.Frame(self.frame_principal, bg=ESCURO, height=58)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
@@ -1268,11 +1131,11 @@ class InterfaceGrafica:
         btn_sair.pack(side=tk.RIGHT, pady=12)
         self._configurar_hover_botao(btn_sair, VERMELHO, "#c0392b")
 
-        # Conteúdo (padding maior para não colar nas bordas)
+        # Corpo principal da interface.
         body = tk.Frame(self.frame_principal, bg=CINZA_F)
         body.pack(fill=tk.BOTH, expand=True, padx=20, pady=12)
 
-        # ── Filtros ──────────────────────────────────────────
+        # Área de filtros.
         lf_filtros = tk.LabelFrame(body, text="  Filtros de Pesquisa  ",
                                   bg=CINZA_F, font=(FONTE_FAMILY, 10, "bold"),
                                   relief=tk.GROOVE, bd=1, padx=14, pady=12)
